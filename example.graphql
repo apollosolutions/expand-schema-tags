@@ -1,0 +1,25 @@
+extend schema @tag(name: "mytag")
+
+directive @tag(name: String!) on SCHEMA | OBJECT | FIELD_DEFINITION | INTERFACE | UNION
+
+type Query {
+  a: A
+}
+
+type Mutation {
+  c: C
+}
+
+type Subscription {
+  d: D
+}
+
+type A implements C @tag(name: "other") {
+  b: String
+}
+
+interface C {
+  b: String
+}
+
+union D = A

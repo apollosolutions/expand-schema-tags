@@ -1,0 +1,26 @@
+{
+  "name": "@apollosolutions/expand-schema-tags",
+  "version": "1.0.0",
+  "main": "index.js",
+  "bin": "bin/index.js",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules $(yarn bin)/jest"
+  },
+  "dependencies": {
+    "@apollo/subgraph": "^2.0.0-preview.7",
+    "@graphql-tools/utils": "^8.6.5",
+    "clipanion": "^3.2.0-rc.10",
+    "get-stdin": "^9.0.0",
+    "graphql": "^16.3.0",
+    "typanion": "^3.7.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.4.1",
+    "@types/node": "^17.0.23",
+    "eslint": "^8.11.0",
+    "jest": "^27.5.1",
+    "typescript": "^4.6.2"
+  }
+}
