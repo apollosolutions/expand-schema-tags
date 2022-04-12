@@ -8,6 +8,7 @@ test("expanding schema tags", async () => {
 
     type Query {
       a: A
+      external: String @external
     }
 
     type Mutation {
@@ -36,6 +37,7 @@ test("expanding schema tags", async () => {
 
 type Query {
   a: A @tag(name: \\"mytag\\")
+  external: String @external
 }
 
 type Mutation {

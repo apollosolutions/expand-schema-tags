@@ -35,4 +35,5 @@ type Bar @tag(name: "put-this-everywhere") {
 
 ## Notes
 
-Inspired by our friends at Wayfair. ❤️
+- Inspired by our friends at Wayfair. ❤️
+- Does not add tags to `@external` fields because that's invalid in Federation 2.

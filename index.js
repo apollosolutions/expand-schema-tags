@@ -97,6 +97,11 @@ function addTagsToFields(schema, node, tags) {
   const fieldsWithTags = (node.fields ?? []).map((field) => {
     const fieldDef = type.getFields()[field.name.value];
 
+    const isExternal = getDirective(schema, fieldDef, "external");
+    if (isExternal?.length) {
+      return field;
+    }
+
     const existingTags =
       getDirective(schema, fieldDef, "tag")?.map((dir) => dir.name) ?? [];
     const tagsToAdd = tags.filter((tag) => !existingTags.includes(tag));
