@@ -28,12 +28,14 @@ type Query {
   foo: String @tag(name: "put-this-everywhere")
 }
 
-type Bar @tag(name: "put-this-everywhere") {
-  id: ID!
+type Bar {
+  id: ID! @tag(name: "put-this-everywhere")
 }
 ```
 
 ## Notes
 
 - Inspired by our friends at Wayfair. ❤️
+- If the script detects the Federation 2 `@link` directive, it will tag enum values and input type fields.
+- Tags fields and not types/interfaces. Tagging a type can affect fields in other subgraphs due to post-composition tag inheritance.
 - Does not add tags to `@external` fields because that's invalid in Federation 2.

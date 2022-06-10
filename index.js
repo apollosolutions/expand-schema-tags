@@ -1,8 +1,12 @@
 import { getDirective } from "@graphql-tools/utils";
 import {
+  BREAK,
   DirectiveLocation,
   GraphQLSchema,
   GraphQLString,
+  isEnumType,
+  isInputObjectType,
+  isInterfaceType,
   isObjectType,
   Kind,
   parse,
@@ -37,6 +41,38 @@ const canonicalTagDefinition = {
   ],
 };
 
+/** @type {import("graphql").DirectiveDefinitionNode} */
+const canonicalTagDefinitionFed2 = {
+  kind: Kind.DIRECTIVE_DEFINITION,
+  name: { kind: Kind.NAME, value: "tag" },
+  arguments: [
+    {
+      kind: Kind.INPUT_VALUE_DEFINITION,
+      name: { kind: Kind.NAME, value: "name" },
+      type: {
+        kind: Kind.NON_NULL_TYPE,
+        type: {
+          kind: Kind.NAMED_TYPE,
+          name: { kind: Kind.NAME, value: GraphQLString.name },
+        },
+      },
+    },
+  ],
+  repeatable: true,
+  locations: [
+    { kind: Kind.NAME, value: DirectiveLocation.FIELD_DEFINITION },
+    { kind: Kind.NAME, value: DirectiveLocation.INTERFACE },
+    { kind: Kind.NAME, value: DirectiveLocation.OBJECT },
+    { kind: Kind.NAME, value: DirectiveLocation.UNION },
+    { kind: Kind.NAME, value: DirectiveLocation.ARGUMENT_DEFINITION },
+    { kind: Kind.NAME, value: DirectiveLocation.SCALAR },
+    { kind: Kind.NAME, value: DirectiveLocation.ENUM },
+    { kind: Kind.NAME, value: DirectiveLocation.ENUM_VALUE },
+    { kind: Kind.NAME, value: DirectiveLocation.INPUT_OBJECT },
+    { kind: Kind.NAME, value: DirectiveLocation.INPUT_FIELD_DEFINITION },
+  ],
+};
+
 /**
  * @param {string} name
  * @returns {import("graphql").DirectiveNode}
@@ -56,8 +92,17 @@ function makeTag(name) {
 }
 
 /**
+ * @typedef {import("graphql").ObjectTypeDefinitionNode |
+ * import("graphql").InterfaceTypeDefinitionNode |
+ * import("graphql").UnionTypeDefinitionNode |
+ * import("graphql").EnumTypeDefinitionNode |
+ * import("graphql").InputObjectTypeDefinitionNode |
+ * import("graphql").ScalarTypeDefinitionNode} TaggableNode
+ */
+
+/**
  * @param {GraphQLSchema} schema
- * @param {import("graphql").ObjectTypeDefinitionNode | import("graphql").InterfaceTypeDefinitionNode | import("graphql").UnionTypeDefinitionNode} node
+ * @param {TaggableNode} node
  * @param {string[]} tags
  */
 function addTags(schema, node, tags) {
@@ -84,7 +129,7 @@ function addTags(schema, node, tags) {
 
 /**
  * @param {GraphQLSchema} schema
- * @param {import("graphql").ObjectTypeDefinitionNode} node
+ * @param {import("graphql").ObjectTypeDefinitionNode | import("graphql").InterfaceTypeDefinitionNode | import("graphql").InputObjectTypeDefinitionNode} node
  * @param {string[]} tags
  */
 function addTagsToFields(schema, node, tags) {
@@ -92,7 +137,8 @@ function addTagsToFields(schema, node, tags) {
   const type = schema.getType(name);
   if (!type) return node;
 
-  if (!isObjectType(type)) return node;
+  if (!isObjectType(type) && !isInterfaceType(type) && !isInputObjectType(type))
+    return node;
 
   const fieldsWithTags = (node.fields ?? []).map((field) => {
     const fieldDef = type.getFields()[field.name.value];
@@ -122,19 +168,85 @@ function addTagsToFields(schema, node, tags) {
 }
 
 /**
- * @param {string} sdl
+ * @param {GraphQLSchema} schema
+ * @param {import("graphql").EnumTypeDefinitionNode} node
+ * @param {string[]} tags
  */
-export function expandSchemaTag(sdl) {
-  const document = parse(sdl);
+function addTagsToValues(schema, node, tags) {
+  const name = node.name.value;
+  const type = schema.getType(name);
+  if (!type) return node;
 
-  const schema = buildSubgraphSchema(document);
-  const tags =
-    getDirective(schema, schema, "tag")?.map((dir) => dir.name) ?? [];
+  if (!isEnumType(type)) return node;
+
+  const valuesWithTags = (node.values ?? []).map((value) => {
+    const valueDef = type.getValue(value.name.value);
+
+    if (!valueDef) return value;
+
+    const existingTags =
+      getDirective(schema, valueDef, "tag")?.map((dir) => dir.name) ?? [];
+    const tagsToAdd = tags.filter((tag) => !existingTags.includes(tag));
+
+    return {
+      ...value,
+      directives: [
+        ...(value.directives ?? []),
+        ...tagsToAdd.map((name) => makeTag(name)),
+      ],
+    };
+  });
+
+  return {
+    ...node,
+    values: valuesWithTags,
+  };
+}
+/**
+ * @param {import("graphql").DocumentNode} document
+ */
+function isFederation2(document) {
+  let isFed2 = false;
+  visit(document, {
+    enter(node) {
+      if (
+        node.kind === Kind.SCHEMA_DEFINITION ||
+        node.kind === Kind.SCHEMA_EXTENSION
+      ) {
+        const links = node.directives?.filter((d) => d.name.value === "link");
+        isFed2 =
+          links?.some((d) =>
+            d.arguments?.some(
+              (a) =>
+                a.name.value === "url" &&
+                a.value.kind === Kind.STRING &&
+                a.value.value === "https://specs.apollo.dev/federation/v2.0"
+            )
+          ) ?? false;
+        if (isFed2) {
+          return BREAK;
+        }
+      }
+    },
+  });
+  return isFed2;
+}
+
+/**
+ * @param {import("graphql").DocumentNode} document
+ * @param {boolean} isFed2
+ * @returns {[import("graphql").DocumentNode, string[]]}
+ */
+function fixTagDirectiveDefinition(document, isFed2) {
+  /** @type {Set<string>} */
+  const tags = new Set();
 
   const newDocument = visit(document, {
     // remove @tag directives
     SchemaDefinition: {
       enter(node) {
+        getTagNames(node).forEach((name) => tags.add(name));
+
         return {
           ...node,
           directives: [
@@ -147,6 +259,8 @@ export function expandSchemaTag(sdl) {
     // remove @tag directives, and remove entirely if there are no other directives
     SchemaExtension: {
       enter(node) {
+        getTagNames(node).forEach((name) => tags.add(name));
+
         const remainingDirectives =
           node.directives?.filter((d) => d.name.value !== "tag") ?? [];
 
@@ -161,43 +275,94 @@ export function expandSchemaTag(sdl) {
       },
     },
 
-    // swap with the canonical tag directive definition
+    // swap with the canonical tag directive definition, or remove entirely
+    // if it's imported with @link (fed2)
     DirectiveDefinition: {
       enter(node) {
-        if (node.name.value === "tag") return canonicalTagDefinition;
-      },
-    },
-
-    // if it's a root type, add the tags to all fields
-    // if it's another type, add the tags
-    ObjectTypeDefinition: {
-      enter(node) {
-        if (
-          node.name.value === schema.getQueryType()?.name ||
-          node.name.value === schema.getMutationType()?.name ||
-          node.name.value === schema.getSubscriptionType()?.name
-        ) {
-          return addTagsToFields(schema, node, tags);
-        } else {
-          return addTags(schema, node, tags);
+        if (node.name.value === "tag") {
+          return isFed2 ? canonicalTagDefinitionFed2 : canonicalTagDefinition;
         }
       },
     },
+  });
 
-    // add tags
+  return [newDocument, [...tags]];
+}
+
+/**
+ * @param {string} sdl
+ */
+export function expandSchemaTag(sdl) {
+  const document = parse(sdl);
+
+  const isFed2 = isFederation2(document);
+  const [fixedDocument, tags] = fixTagDirectiveDefinition(document, isFed2);
+  const schema = buildSubgraphSchema(fixedDocument);
+
+  const newDocument = visit(fixedDocument, {
+    ObjectTypeDefinition: {
+      enter(node) {
+        return addTagsToFields(schema, node, tags);
+      },
+    },
+
     InterfaceTypeDefinition: {
+      enter(node) {
+        return addTagsToFields(schema, node, tags);
+      },
+    },
+
+    UnionTypeDefinition: {
       enter(node) {
         return addTags(schema, node, tags);
       },
     },
 
-    // add tags
-    UnionTypeDefinition: {
+    EnumTypeDefinition: {
       enter(node) {
+        if (!isFed2) return;
+        return addTagsToValues(schema, node, tags);
+      },
+    },
+
+    InputObjectTypeDefinition: {
+      enter(node) {
+        if (!isFed2) return;
+        return addTagsToFields(schema, node, tags);
+      },
+    },
+
+    ScalarTypeDefinition: {
+      enter(node) {
+        if (!isFed2) return;
         return addTags(schema, node, tags);
       },
     },
   });
 
   return print(newDocument);
+}
+
+/**
+ * A version of `getDirectives` that doesn't require a schema. The schema with
+ * schema tags isn't valid yet, so we can build a schema to use with the
+ * graphql-tools version.
+ * @param {import("graphql").ASTNode} node
+ */
+function getTagNames(node) {
+  if (!("directives" in node)) return [];
+
+  const tagDirectives =
+    node.directives?.filter((d) => d.name.value === "tag") ?? [];
+
+  const nameArguments = tagDirectives
+    .map((d) => d.arguments?.find((a) => a.name.value === "name"))
+    .filter(
+      /** @returns {a is import("graphql").ConstArgumentNode} */ (a) =>
+        Boolean(a)
+    );
+
+  return nameArguments
+    .map((a) => (a.value.kind === Kind.STRING ? a.value.value : null))
+    .filter(/** @returns {a is string} */ (a) => Boolean(a));
 }
