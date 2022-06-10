@@ -202,6 +202,7 @@ function addTagsToValues(schema, node, tags) {
     values: valuesWithTags,
   };
 }
+
 /**
  * @param {import("graphql").DocumentNode} document
  */
@@ -237,7 +238,7 @@ function isFederation2(document) {
  * @param {boolean} isFed2
  * @returns {[import("graphql").DocumentNode, string[]]}
  */
-function fixTagDirectiveDefinition(document, isFed2) {
+function extractSchemaTags(document, isFed2) {
   /** @type {Set<string>} */
   const tags = new Set();
 
@@ -275,8 +276,7 @@ function fixTagDirectiveDefinition(document, isFed2) {
       },
     },
 
-    // swap with the canonical tag directive definition, or remove entirely
-    // if it's imported with @link (fed2)
+    // swap with the canonical tag directive definition
     DirectiveDefinition: {
       enter(node) {
         if (node.name.value === "tag") {
@@ -296,7 +296,7 @@ export function expandSchemaTag(sdl) {
   const document = parse(sdl);
 
   const isFed2 = isFederation2(document);
-  const [fixedDocument, tags] = fixTagDirectiveDefinition(document, isFed2);
+  const [fixedDocument, tags] = extractSchemaTags(document, isFed2);
   const schema = buildSubgraphSchema(fixedDocument);
 
   const newDocument = visit(fixedDocument, {
