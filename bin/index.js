@@ -9,6 +9,8 @@ runExit(
   class DefaultCommand extends Command {
     file = Option.String("--file,-f");
 
+    inherit = Option.Boolean("--apply-inheritance,-i");
+
     async execute() {
       const sdl = this.file
         ? await readFile(this.file, "utf-8")
@@ -19,7 +21,9 @@ runExit(
         process.exit(1);
       }
 
-      this.context.stdout.write(expandSchemaTag(sdl) + "\n");
+      this.context.stdout.write(
+        expandSchemaTag(sdl, { applyInheritance: this.inherit ?? false }) + "\n"
+      );
     }
   }
 );

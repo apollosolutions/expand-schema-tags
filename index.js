@@ -131,14 +131,25 @@ function addTags(schema, node, tags) {
  * @param {GraphQLSchema} schema
  * @param {import("graphql").ObjectTypeDefinitionNode | import("graphql").InterfaceTypeDefinitionNode | import("graphql").InputObjectTypeDefinitionNode} node
  * @param {string[]} tags
+ * @param {{ applyInheritance: boolean }} options
  */
-function addTagsToFields(schema, node, tags) {
+function addTagsToFields(schema, node, tags, { applyInheritance }) {
   const name = node.name.value;
   const type = schema.getType(name);
   if (!type) return node;
 
   if (!isObjectType(type) && !isInterfaceType(type) && !isInputObjectType(type))
     return node;
+
+  const typeDirectives = applyInheritance
+    ? getDirective(schema, type, "tag") ?? []
+    : [];
+  const allTagsToAdd = [
+    ...new Set([...tags, ...typeDirectives.map((d) => d.name)]),
+  ];
+  const directives = applyInheritance
+    ? node.directives?.filter((d) => d.name.value !== "tag")
+    : node.directives;
 
   const fieldsWithTags = (node.fields ?? []).map((field) => {
     const fieldDef = type.getFields()[field.name.value];
@@ -150,7 +161,7 @@ function addTagsToFields(schema, node, tags) {
 
     const existingTags =
       getDirective(schema, fieldDef, "tag")?.map((dir) => dir.name) ?? [];
-    const tagsToAdd = tags.filter((tag) => !existingTags.includes(tag));
+    const tagsToAdd = allTagsToAdd.filter((tag) => !existingTags.includes(tag));
 
     return {
       ...field,
@@ -163,6 +174,7 @@ function addTagsToFields(schema, node, tags) {
 
   return {
     ...node,
+    directives,
     fields: fieldsWithTags,
   };
 }
@@ -171,13 +183,24 @@ function addTagsToFields(schema, node, tags) {
  * @param {GraphQLSchema} schema
  * @param {import("graphql").EnumTypeDefinitionNode} node
  * @param {string[]} tags
+ * @param {{ applyInheritance: boolean }} options
  */
-function addTagsToValues(schema, node, tags) {
+function addTagsToValues(schema, node, tags, { applyInheritance }) {
   const name = node.name.value;
   const type = schema.getType(name);
   if (!type) return node;
 
   if (!isEnumType(type)) return node;
+
+  const typeDirectives = applyInheritance
+    ? getDirective(schema, type, "tag") ?? []
+    : [];
+  const allTagsToAdd = [
+    ...new Set([...tags, ...typeDirectives.map((d) => d.name)]),
+  ];
+  const directives = applyInheritance
+    ? node.directives?.filter((d) => d.name.value !== "tag")
+    : node.directives;
 
   const valuesWithTags = (node.values ?? []).map((value) => {
     const valueDef = type.getValue(value.name.value);
@@ -186,7 +209,7 @@ function addTagsToValues(schema, node, tags) {
 
     const existingTags =
       getDirective(schema, valueDef, "tag")?.map((dir) => dir.name) ?? [];
-    const tagsToAdd = tags.filter((tag) => !existingTags.includes(tag));
+    const tagsToAdd = allTagsToAdd.filter((tag) => !existingTags.includes(tag));
 
     return {
       ...value,
@@ -199,6 +222,7 @@ function addTagsToValues(schema, node, tags) {
 
   return {
     ...node,
+    directives,
     values: valuesWithTags,
   };
 }
@@ -291,8 +315,9 @@ function extractSchemaTags(document, isFed2) {
 
 /**
  * @param {string} sdl
+ * @param {{ applyInheritance: boolean }} options
  */
-export function expandSchemaTag(sdl) {
+export function expandSchemaTag(sdl, { applyInheritance }) {
   const document = parse(sdl);
 
   const isFed2 = isFederation2(document);
@@ -302,13 +327,13 @@ export function expandSchemaTag(sdl) {
   const newDocument = visit(fixedDocument, {
     ObjectTypeDefinition: {
       enter(node) {
-        return addTagsToFields(schema, node, tags);
+        return addTagsToFields(schema, node, tags, { applyInheritance });
       },
     },
 
     InterfaceTypeDefinition: {
       enter(node) {
-        return addTagsToFields(schema, node, tags);
+        return addTagsToFields(schema, node, tags, { applyInheritance });
       },
     },
 
@@ -321,14 +346,14 @@ export function expandSchemaTag(sdl) {
     EnumTypeDefinition: {
       enter(node) {
         if (!isFed2) return;
-        return addTagsToValues(schema, node, tags);
+        return addTagsToValues(schema, node, tags, { applyInheritance });
       },
     },
 
     InputObjectTypeDefinition: {
       enter(node) {
         if (!isFed2) return;
-        return addTagsToFields(schema, node, tags);
+        return addTagsToFields(schema, node, tags, { applyInheritance });
       },
     },
 
