@@ -245,7 +245,7 @@ function isFederation2(document) {
               (a) =>
                 a.name.value === "url" &&
                 a.value.kind === Kind.STRING &&
-                a.value.value === "https://specs.apollo.dev/federation/v2.0"
+                a.value.value.startsWith("https://specs.apollo.dev/federation/v2")
             )
           ) ?? false;
         if (isFed2) {
