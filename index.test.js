@@ -4,7 +4,7 @@ test("expanding schema tags", async () => {
   const sdl = `#graphql
     extend schema @tag(name: "mytag")
 
-    directive @tag(name: String!) on SCHEMA | OBJECT | FIELD_DEFINITION | INTERFACE | UNION
+    directive @tag(name: String!) repeatable on SCHEMA | OBJECT | FIELD_DEFINITION | INTERFACE | UNION
 
     type Query {
       a: A
@@ -42,7 +42,7 @@ test("expanding schema tags", async () => {
   const actual = expandSchemaTag(sdl, { applyInheritance: false });
 
   expect(actual).toMatchInlineSnapshot(`
-"directive @tag(name: String!) repeatable on FIELD_DEFINITION | INTERFACE | OBJECT | UNION
+"directive @tag(name: String!) repeatable on OBJECT | FIELD_DEFINITION | INTERFACE | UNION
 
 type Query {
   a: A @tag(name: \\"mytag\\")
@@ -203,7 +203,7 @@ test("--inherit", async () => {
   const actual = expandSchemaTag(sdl, { applyInheritance: true });
 
   expect(actual).toMatchInlineSnapshot(`
-"directive @tag(name: String!) repeatable on FIELD_DEFINITION | INTERFACE | OBJECT | UNION
+"directive @tag(name: String!) on OBJECT | FIELD_DEFINITION | INTERFACE | UNION
 
 type Query {
   a: A @tag(name: \\"mytag\\")

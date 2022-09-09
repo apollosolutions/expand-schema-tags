@@ -3,7 +3,6 @@ import {
   BREAK,
   DirectiveLocation,
   GraphQLSchema,
-  GraphQLString,
   isEnumType,
   isInputObjectType,
   isInterfaceType,
@@ -14,64 +13,6 @@ import {
   visit,
 } from "graphql";
 import { buildSubgraphSchema } from "@apollo/subgraph";
-
-/** @type {import("graphql").DirectiveDefinitionNode} */
-const canonicalTagDefinition = {
-  kind: Kind.DIRECTIVE_DEFINITION,
-  name: { kind: Kind.NAME, value: "tag" },
-  arguments: [
-    {
-      kind: Kind.INPUT_VALUE_DEFINITION,
-      name: { kind: Kind.NAME, value: "name" },
-      type: {
-        kind: Kind.NON_NULL_TYPE,
-        type: {
-          kind: Kind.NAMED_TYPE,
-          name: { kind: Kind.NAME, value: GraphQLString.name },
-        },
-      },
-    },
-  ],
-  repeatable: true,
-  locations: [
-    { kind: Kind.NAME, value: DirectiveLocation.FIELD_DEFINITION },
-    { kind: Kind.NAME, value: DirectiveLocation.INTERFACE },
-    { kind: Kind.NAME, value: DirectiveLocation.OBJECT },
-    { kind: Kind.NAME, value: DirectiveLocation.UNION },
-  ],
-};
-
-/** @type {import("graphql").DirectiveDefinitionNode} */
-const canonicalTagDefinitionFed2 = {
-  kind: Kind.DIRECTIVE_DEFINITION,
-  name: { kind: Kind.NAME, value: "tag" },
-  arguments: [
-    {
-      kind: Kind.INPUT_VALUE_DEFINITION,
-      name: { kind: Kind.NAME, value: "name" },
-      type: {
-        kind: Kind.NON_NULL_TYPE,
-        type: {
-          kind: Kind.NAMED_TYPE,
-          name: { kind: Kind.NAME, value: GraphQLString.name },
-        },
-      },
-    },
-  ],
-  repeatable: true,
-  locations: [
-    { kind: Kind.NAME, value: DirectiveLocation.FIELD_DEFINITION },
-    { kind: Kind.NAME, value: DirectiveLocation.INTERFACE },
-    { kind: Kind.NAME, value: DirectiveLocation.OBJECT },
-    { kind: Kind.NAME, value: DirectiveLocation.UNION },
-    { kind: Kind.NAME, value: DirectiveLocation.ARGUMENT_DEFINITION },
-    { kind: Kind.NAME, value: DirectiveLocation.SCALAR },
-    { kind: Kind.NAME, value: DirectiveLocation.ENUM },
-    { kind: Kind.NAME, value: DirectiveLocation.ENUM_VALUE },
-    { kind: Kind.NAME, value: DirectiveLocation.INPUT_OBJECT },
-    { kind: Kind.NAME, value: DirectiveLocation.INPUT_FIELD_DEFINITION },
-  ],
-};
 
 /**
  * @param {string} name
@@ -88,6 +29,19 @@ function makeTag(name) {
         value: { kind: Kind.STRING, value: name },
       },
     ],
+  };
+}
+
+/**
+ * @param {import("graphql").DirectiveDefinitionNode} def
+ * @returns {import("graphql").DirectiveDefinitionNode}
+ */
+function fixTagDirectiveDefinition(def) {
+  return {
+    ...def,
+    locations: def.locations.filter(
+      (l) => l.value !== DirectiveLocation.SCHEMA
+    ),
   };
 }
 
@@ -245,7 +199,9 @@ function isFederation2(document) {
               (a) =>
                 a.name.value === "url" &&
                 a.value.kind === Kind.STRING &&
-                a.value.value.startsWith("https://specs.apollo.dev/federation/v2")
+                a.value.value.startsWith(
+                  "https://specs.apollo.dev/federation/v2"
+                )
             )
           ) ?? false;
         if (isFed2) {
@@ -304,7 +260,7 @@ function extractSchemaTags(document, isFed2) {
     DirectiveDefinition: {
       enter(node) {
         if (node.name.value === "tag") {
-          return isFed2 ? canonicalTagDefinitionFed2 : canonicalTagDefinition;
+          return fixTagDirectiveDefinition(node);
         }
       },
     },
