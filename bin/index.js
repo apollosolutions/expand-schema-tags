@@ -11,6 +11,8 @@ runExit(
 
     inherit = Option.Boolean("--apply-inheritance,-i");
 
+    fed2 = Option.Boolean("--fed2");
+
     async execute() {
       const sdl = this.file
         ? await readFile(this.file, "utf-8")
@@ -22,7 +24,10 @@ runExit(
       }
 
       this.context.stdout.write(
-        expandSchemaTag(sdl, { applyInheritance: this.inherit ?? false }) + "\n"
+        expandSchemaTag(sdl, {
+          applyInheritance: this.inherit ?? false,
+          isFed2: this.fed2,
+        }) + "\n"
       );
     }
   }

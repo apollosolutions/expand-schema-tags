@@ -321,3 +321,46 @@ input I {
 scalar JSON @tag(name: \\"mytag\\")"
 `);
 });
+
+test("fed2 flag", async () => {
+  const sdl = `#graphql
+    extend schema @tag(name: "mytag")
+
+    type Query {
+      a: String
+    }
+
+    enum Enum {
+      X
+      Y
+    }
+
+    input I {
+      f: String
+    }
+
+    scalar JSON
+  `;
+
+  const actual = expandSchemaTag(sdl, {
+    applyInheritance: false,
+    isFed2: true,
+  });
+
+  expect(actual).toMatchInlineSnapshot(`
+"type Query {
+  a: String @tag(name: \\"mytag\\")
+}
+
+enum Enum {
+  X @tag(name: \\"mytag\\")
+  Y @tag(name: \\"mytag\\")
+}
+
+input I {
+  f: String @tag(name: \\"mytag\\")
+}
+
+scalar JSON @tag(name: \\"mytag\\")"
+`);
+});

@@ -215,10 +215,9 @@ function isFederation2(document) {
 
 /**
  * @param {import("graphql").DocumentNode} document
- * @param {boolean} isFed2
  * @returns {[import("graphql").DocumentNode, string[]]}
  */
-function extractSchemaTags(document, isFed2) {
+function extractSchemaTags(document) {
   /** @type {Set<string>} */
   const tags = new Set();
 
@@ -271,13 +270,13 @@ function extractSchemaTags(document, isFed2) {
 
 /**
  * @param {string} sdl
- * @param {{ applyInheritance: boolean }} options
+ * @param {{ applyInheritance: boolean, isFed2?: boolean }} options
  */
-export function expandSchemaTag(sdl, { applyInheritance }) {
+export function expandSchemaTag(sdl, { applyInheritance, isFed2 }) {
   const document = parse(sdl);
 
-  const isFed2 = isFederation2(document);
-  const [fixedDocument, tags] = extractSchemaTags(document, isFed2);
+  isFed2 = isFed2 ?? isFederation2(document);
+  const [fixedDocument, tags] = extractSchemaTags(document);
   const schema = buildSubgraphSchema(fixedDocument);
 
   const newDocument = visit(fixedDocument, {
