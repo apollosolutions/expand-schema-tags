@@ -1,6 +1,7 @@
 import { getDirective } from "@graphql-tools/utils";
 import {
   BREAK,
+  buildASTSchema,
   DirectiveLocation,
   GraphQLSchema,
   isEnumType,
@@ -12,7 +13,6 @@ import {
   print,
   visit,
 } from "graphql";
-import { buildSubgraphSchema } from "@apollo/subgraph";
 
 /**
  * @param {string} name
@@ -95,12 +95,10 @@ function addTagsToFields(schema, node, tags, { applyInheritance }) {
   if (!isObjectType(type) && !isInterfaceType(type) && !isInputObjectType(type))
     return node;
 
-  const typeDirectives = applyInheritance
-    ? getDirective(schema, type, "tag") ?? []
+  const typeDirectiveNames = applyInheritance
+    ? getTagNames(type.astNode) ?? []
     : [];
-  const allTagsToAdd = [
-    ...new Set([...tags, ...typeDirectives.map((d) => d.name)]),
-  ];
+  const allTagsToAdd = [...new Set([...tags, ...typeDirectiveNames])];
   const directives = applyInheritance
     ? node.directives?.filter((d) => d.name.value !== "tag")
     : node.directives;
@@ -108,8 +106,9 @@ function addTagsToFields(schema, node, tags, { applyInheritance }) {
   const fieldsWithTags = (node.fields ?? []).map((field) => {
     const fieldDef = type.getFields()[field.name.value];
 
-    const isExternal = getDirective(schema, fieldDef, "external");
-    if (isExternal?.length) {
+    // can't use getDirective here because external may not be defined in the schema
+    const isExternal = getDirectiveNames(fieldDef.astNode).includes("external");
+    if (isExternal) {
       return field;
     }
 
@@ -146,12 +145,10 @@ function addTagsToValues(schema, node, tags, { applyInheritance }) {
 
   if (!isEnumType(type)) return node;
 
-  const typeDirectives = applyInheritance
-    ? getDirective(schema, type, "tag") ?? []
+  const typeDirectiveNames = applyInheritance
+    ? getTagNames(type.astNode) ?? []
     : [];
-  const allTagsToAdd = [
-    ...new Set([...tags, ...typeDirectives.map((d) => d.name)]),
-  ];
+  const allTagsToAdd = [...new Set([...tags, ...typeDirectiveNames])];
   const directives = applyInheritance
     ? node.directives?.filter((d) => d.name.value !== "tag")
     : node.directives;
@@ -277,7 +274,11 @@ export function expandSchemaTag(sdl, { applyInheritance, isFed2 }) {
 
   isFed2 = isFed2 ?? isFederation2(document);
   const [fixedDocument, tags] = extractSchemaTags(document);
-  const schema = buildSubgraphSchema(fixedDocument);
+  // const schema = buildSubgraphSchema(fixedDocument);
+  const schema = buildASTSchema(fixedDocument, {
+    assumeValid: true,
+    assumeValidSDL: true,
+  });
 
   const newDocument = visit(fixedDocument, {
     ObjectTypeDefinition: {
@@ -327,10 +328,21 @@ export function expandSchemaTag(sdl, { applyInheritance, isFed2 }) {
  * A version of `getDirectives` that doesn't require a schema. The schema with
  * schema tags isn't valid yet, so we can build a schema to use with the
  * graphql-tools version.
- * @param {import("graphql").ASTNode} node
+ * @param {import("graphql").ASTNode | null | undefined} node
+ */
+function getDirectiveNames(node) {
+  if (!node || !("directives" in node)) return [];
+  return node.directives?.map((d) => d.name.value) ?? [];
+}
+
+/**
+ * A version of `getDirectives` that doesn't require a schema. The schema with
+ * schema tags isn't valid yet, so we can build a schema to use with the
+ * graphql-tools version.
+ * @param {import("graphql").ASTNode | null | undefined} node
  */
 function getTagNames(node) {
-  if (!("directives" in node)) return [];
+  if (!node || !("directives" in node)) return [];
 
   const tagDirectives =
     node.directives?.filter((d) => d.name.value === "tag") ?? [];
