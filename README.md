@@ -33,7 +33,7 @@ type Bar {
 }
 ```
 
-Additionally, you can provide the `--inherit` flag to apply inheritance rules:
+Additionally, you can provide the `--apply-inheritance` flag to apply inheritance rules:
 
 ```graphql
 type Bar @tag(name: "public") {
@@ -45,7 +45,7 @@ type Bar @tag(name: "public") {
 
 ```sh
 cat myschema.graphql \
-  | npx github:@apollosolutions/expand-schema-tags --inherit
+  | npx github:@apollosolutions/expand-schema-tags --apply-inheritance
 ```
 
 ```graphql
