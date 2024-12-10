@@ -1,0 +1,6 @@
+name: expand-schema-tags
+description: A script that enables tagging all elements of a schema by adding a
+  tag to the schema definition itself.
+tags:
+  - Schema
+  - Directives
